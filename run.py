@@ -4,16 +4,14 @@ import math
 import numpy as np
 from matplotlib import pyplot as plt # for plotting
 
+sys.path.append('/usr/local/lib/python2.7/site-packages')
+
 # COMPARE_METHODS = (
 #     ('Correlation', cv2.cv.CV_COMP_CORREL),
 #     ('Chi-Square', cv2.cv.CV_COMP_CHISQR),
 #     ('Intersection', cv2.cv.CV_COMP_INTERSECT),
 #     ('Hellinger', cv2.cv.CV_COMP_BHATTACHARYYA)
 # )
-
-COMPARE_METHODS = (
-    ('Correlation', cv2.cv.CV_COMP_CORREL),
-)
 
 
 def load_video(path):
@@ -27,15 +25,22 @@ def load_video(path):
         sys.exit()
     else:
         print "Parsing video %s ..." % (path)
-        width = cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
-        height = cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
+        width = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
         print "Video Resolution (width x height): %d x %d" % (width, height)
         long_side = max(width,height)
         if long_side > MAX_LONG_SIZE:
             resize = math.pow(2,long_side/MAX_LONG_SIZE)
         resize_width = int(width/resize)
         resize_height = int(height/resize)
-    return cap, resize_width, resize_height
+    return cap, width, height, resize_width, resize_height
+
+
+def division(frame):
+    #TODO: divide each frame into 4x4 windows
+    length, width, ch = frame.shape
+    blocks = [frame[:length/2, :width/2], frame[length/2:, :width/2], frame[:length/2, width/2:], frame[length/2:, width/2:]]
+    return blocks
 
 
 def histogram(frame):
@@ -152,6 +157,7 @@ def FREAK(img1, img2):
 
     return kp1, des1, kp2, des2
 
+
 def BRIEF(img1, img2):
     # Initiate STAR detector
     star = cv2.FeatureDetector_create("STAR")
@@ -182,33 +188,36 @@ def homography(good,kp1,kp2):
 
     return ((kp1_t-dst_pts)**2).sum()/len(good)
 
+
 def match(img1, img2):
     ## img1: queryImage, img2: trainImage
-    MIN_MATCH_COUNT = 20
-    MAX_DIST = 10
+    MIN_MATCH_COUNT = 4
+    MAX_DIST = 20
 
     # kp1, des1, kp2, des2 = SIFT(img1, img2)
     kp1, des1, kp2, des2 = SURF(img1, img2)
     # kp1, des1, kp2, des2 = FREAK(img1, img2)
     # kp1, des1, kp2, des2 = BRIEF(img1, img2)
 
-
-    FLANN_INDEX_KDTREE = 0
-    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-    search_params = dict(checks = 50)
-
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-    matches = flann.knnMatch(des1,des2,k=2)
-
-    # store all the good matches as per Lowe's ratio test.
     good = []
-    for m,n in matches:
-        if m.distance < 0.6*n.distance:
-            good.append(m)
+    if len(kp1) >= 2 and len(kp2) >= 2:
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        matches = flann.knnMatch(des1,des2,k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        for m,n in matches:
+            if m.distance < 0.6*n.distance:
+                good.append(m)
 
     if len(good) > MIN_MATCH_COUNT:
-        dist = homography(good,kp1,kp2)
+        # print good[0].distance
+        good_sort = sorted(good, key=lambda x : x.distance)
+        # print good_sort[0].distance
+        dist = homography(good_sort[0:MIN_MATCH_COUNT],kp1,kp2)
         if dist > MAX_DIST:
             print "Distance too large - %d (pixel)" % (dist)
             return False
@@ -222,15 +231,35 @@ def match(img1, img2):
     return True
 
 
+def save2png(filename, img):
+    cv2.imwrite(filename, img, [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
+
+
+def save2video(filename, frames, fps, frame_size):
+
+    # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
+    out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
+    if len(frames) < fps:
+        save2png('%s.png' % (filename), frames[0])
+    else:
+        for frame in frames:
+            out.write(frame)
+    out.release()
+
+
 def main():
     if len(sys.argv) < 2:
         print "Error - file name must be specified as first argument."
         return
 
-    cap, resize_width, resize_height = load_video(sys.argv[1])
+    cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     print 'fps:', fps
     # sample = int(fps/15) + 1
+
+    # shots = [0]
+    num_shot = 0
+    # buff = []
     index = 0
     while True:
         (rv1, im1) = cap.read()   # im is a valid image if and only if rv is true
@@ -239,31 +268,50 @@ def main():
         ## sampling
         # if index % sample != 0:
         #     continue
-        if not rv1 or not rv2 or index == 1000:
+        if not rv1 or not rv2:
             break
+        # buff.append(im2)
         im1 = cv2.resize(im1,(resize_width,resize_height))
         im2 = cv2.resize(im2,(resize_width,resize_height))
 
+        blocks1 = division(im1)
+        blocks2 = division(im2)
         feature_match = match(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY),cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
+        largest_diff = 0
+        sum_diff = 0
+        for i in range(4):
+            hist1 = histogram(blocks1[i])
+            hist2 = histogram(blocks2[i])
+            diff_r = cv2.compareHist(hist1[0], hist2[0], cv2.cv.CV_COMP_CHISQR)
+            diff_g = cv2.compareHist(hist1[1], hist2[1], cv2.cv.CV_COMP_CHISQR)
+            diff_b = cv2.compareHist(hist1[2], hist2[2], cv2.cv.CV_COMP_CHISQR)
+            diff = diff_b + diff_g + diff_r
+            if diff > largest_diff:
+                largest_diff = diff
+            sum_diff += diff
+        sum_diff -= largest_diff
 
-        hist1 = histogram(im1)
-        hist2 = histogram(im2)
-        for name, method in COMPARE_METHODS:
-            diff_b = cv2.compareHist(hist1[0], hist2[0], method)
-            diff_g = cv2.compareHist(hist1[1], hist2[1], method)
-            diff_r = cv2.compareHist(hist1[2], hist2[2], method)
-            diff = diff_b*diff_b + diff_g*diff_g + diff_r*diff_r
-            print 'hist', diff
-
-        if not feature_match and diff < 2.5 :
+        if not feature_match and sum_diff > 10:
             print index
-            cv2.imshow('frame %s' % (index-1), im1)
-            cv2.imshow('frame %s' % (index), im2)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            print 'sum_diff', sum_diff
+            # shots.append(index)
+            save2png('frame_%s.png' % (index-1), im1)
+            save2png('frame_%s.png' % (index), im2)
+            # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+            num_shot += 1
+            # buff = []
 
-    cap.release()
+            # cv2.imshow('frame %s' % (index-1), im1)
+            # cv2.imshow('frame %s' % (index), im2)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
+    # cap.release()
+    # shots.append(index)
+
+    # print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
+    # for i in range(len(shots)-1):
+        # print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
 
 if __name__ == "__main__":
     main()
