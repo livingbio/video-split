@@ -281,14 +281,15 @@ def save2png(filename, img):
 
 def save2video(filename, frames, fps, frame_size):
 
-    # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
-    out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
     if len(frames) < fps:
         save2png('%s.png' % (filename), frames[0])
     else:
+        print 'saving %s frames in %s fps:' % (len(frames), fps)
+        out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
+        # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
         for frame in frames:
             out.write(frame)
-    out.release()
+        out.release()
 
 
 def main():
@@ -298,12 +299,14 @@ def main():
 
     cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+    total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
     print 'fps:', fps
+    print 'total_frame', total_frame
     # sample = int(fps/15) + 1
 
-    # shots = [0]
+    shots = [0]
     num_shot = 0
-    # buff = []
+    buff = []
     index = 0
     while True:
         (rv1, im1) = cap.read()   # im is a valid image if and only if rv is true
@@ -314,7 +317,7 @@ def main():
         #     continue
         if not rv1 or not rv2:
             break
-        # buff.append(im2)
+        buff.append(im2)
         im1 = cv2.resize(im1,(resize_width,resize_height))
         im2 = cv2.resize(im2,(resize_width,resize_height))
 
@@ -339,8 +342,8 @@ def main():
                 largest_diff = diff
             sum_diff += diff
         sum_diff -= largest_diff
-        print 'sum_diff', sum_diff
-        print 'p', p
+        # print 'sum_diff', sum_diff
+        # print 'p', p
 
         if move:
             if dist != -1:
@@ -348,26 +351,26 @@ def main():
                     continue
                 if p < 0.5:
                     continue
-            print 'index', index
+            # print 'index', index
 
-            # shots.append(index)
-            save2png('frame_%s.png' % (index-1), im1)
-            save2png('frame_%s.png' % (index), im2)
-            # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-            # num_shot += 1
-            # buff = []
+            shots.append(index)
+            # save2png('frame_%s.png' % (index-1), im1)
+            # save2png('frame_%s.png' % (index), im2)
+            save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+            num_shot += 1
+            buff = []
 
             # cv2.imshow('frame %s' % (index-1), im1)
             # cv2.imshow('frame %s' % (index), im2)
             # cv2.waitKey(0)
             # cv2.destroyAllWindows()
 
-    # cap.release()
-    # shots.append(index)
+    cap.release()
+    shots.append(index)
 
-    # print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
-    # for i in range(len(shots)-1):
-        # print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
+    print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
+    for i in range(len(shots)-1):
+        print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
 
 if __name__ == "__main__":
     main()
