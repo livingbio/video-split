@@ -49,7 +49,8 @@ def histogram(frame):
     b = cv2.calcHist([frame], [0], None, [5], [0,256])
     g = cv2.calcHist([frame], [1], None, [5], [0,256])
     r = cv2.calcHist([frame], [2], None, [5], [0,256])
-    hist = (cv2.normalize(b),cv2.normalize(g),cv2.normalize(r))
+    # hist = (cv2.normalize(b),cv2.normalize(g),cv2.normalize(r))
+    hist = (b, g, r)
 
     return hist
 
@@ -138,6 +139,7 @@ def SIFT(img1, img2):
 def SURF(img1, img2):
     # Create SURF object
     # Here I set Hessian Threshold to 400
+    # surf = cv2.xfeatures2d.SURF_create(1000)
     surf = cv2.SURF(1000)
 
     # Find keypoints and descriptors directly
@@ -183,16 +185,16 @@ def homography(good,kp1,kp2):
     src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
     dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
 
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     kp1_t = cv2.perspectiveTransform(src_pts,M)
 
     return ((kp1_t-dst_pts)**2).sum()/len(good)
 
 
-def match(img1, img2):
+def detect_move(img1, img2):
     ## img1: queryImage, img2: trainImage
     MIN_MATCH_COUNT = 4
-    MAX_DIST = 20
+    MAX_DIST = 10
 
     # kp1, des1, kp2, des2 = SIFT(img1, img2)
     kp1, des1, kp2, des2 = SURF(img1, img2)
@@ -214,21 +216,63 @@ def match(img1, img2):
                 good.append(m)
 
     if len(good) > MIN_MATCH_COUNT:
-        # print good[0].distance
         good_sort = sorted(good, key=lambda x : x.distance)
-        # print good_sort[0].distance
-        dist = homography(good_sort[0:MIN_MATCH_COUNT],kp1,kp2)
+        selected_good = len(good_sort)
+        # selected_good = max(MIN_MATCH_COUNT, len(good)/2)
+        good_sort = good_sort[:selected_good]
+        dist = homography(good_sort,kp1,kp2)
+
         if dist > MAX_DIST:
             print "Distance too large - %d (pixel)" % (dist)
-            return False
+            return True, dist
+        else:
+            return False, dist
 
     else:
         img3 = drawMatches(img1,kp1,img2,kp2,good[:10])
         print "Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT)
         matchesMask = None
-        return False
+        return True, -1
 
-    return True
+
+def detect_edge(img):
+    # Otsu's thresholding
+    # blur = cv2.GaussianBlur(img,(5,5),0)
+    ret, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    edge_map = cv2.Canny(img, 200, 600)
+    # edge_map = cv2.Canny(img, ret*0.5, ret)
+    contours, hierarchy = cv2.findContours(edge_map, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
+
+
+def edge_change_fraction(contours1, contours2):
+    pin = len(contours2)
+    pout = len(contours1)
+    # print pout, pin
+
+    for c1 in contours1:
+        for c2 in contours2:
+            ret = cv2.matchShapes(c1, c2, 1, 0.0)
+            if ret < 1:
+                pout = pout - 1
+                break
+
+    for c2 in contours2:
+        for c1 in contours1:
+            ret = cv2.matchShapes(c2, c1, 1, 0.0)
+            if ret < 1:
+                pin = pin - 1
+                break
+    if len(contours2) == 0:
+        pin = 0
+    else:
+        pin /= len(contours2)*1.0
+    if len(contours1) == 0:
+        pout = 0
+    else:
+        pout /= len(contours1)*1.0
+    p = max(pin, pout)
+    return p
 
 
 def save2png(filename, img):
@@ -274,31 +318,43 @@ def main():
         im1 = cv2.resize(im1,(resize_width,resize_height))
         im2 = cv2.resize(im2,(resize_width,resize_height))
 
+        contours1 = detect_edge(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY))
+        contours2 = detect_edge(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
+        p = edge_change_fraction(contours1, contours2)
+
         blocks1 = division(im1)
         blocks2 = division(im2)
-        feature_match = match(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY),cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
+        move, dist = detect_move(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY), cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
         largest_diff = 0
         sum_diff = 0
         for i in range(4):
             hist1 = histogram(blocks1[i])
             hist2 = histogram(blocks2[i])
-            diff_r = cv2.compareHist(hist1[0], hist2[0], cv2.cv.CV_COMP_CHISQR)
-            diff_g = cv2.compareHist(hist1[1], hist2[1], cv2.cv.CV_COMP_CHISQR)
-            diff_b = cv2.compareHist(hist1[2], hist2[2], cv2.cv.CV_COMP_CHISQR)
+            diff_r = cv2.compareHist(hist1[0], hist2[0], 1)
+            diff_g = cv2.compareHist(hist1[1], hist2[1], 1)
+            diff_b = cv2.compareHist(hist1[2], hist2[2], 1)
             diff = diff_b + diff_g + diff_r
+            diff /= blocks1[i].shape[0]*blocks1[i].shape[1]
             if diff > largest_diff:
                 largest_diff = diff
             sum_diff += diff
         sum_diff -= largest_diff
+        print 'sum_diff', sum_diff
+        print 'p', p
 
-        if not feature_match and sum_diff > 10:
-            print index
-            print 'sum_diff', sum_diff
+        if move:
+            if dist != -1:
+                if sum_diff < 0.001:
+                    continue
+                if p < 0.5:
+                    continue
+            print 'index', index
+
             # shots.append(index)
             save2png('frame_%s.png' % (index-1), im1)
             save2png('frame_%s.png' % (index), im2)
             # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-            num_shot += 1
+            # num_shot += 1
             # buff = []
 
             # cv2.imshow('frame %s' % (index-1), im1)
