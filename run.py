@@ -193,8 +193,9 @@ def homography(good,kp1,kp2):
 
 def detect_move(img1, img2):
     ## img1: queryImage, img2: trainImage
+    height, width = img1.shape
     MIN_MATCH_COUNT = 4
-    MAX_DIST = 10
+    MAX_DIST = min(height,width)*0.2
 
     # kp1, des1, kp2, des2 = SIFT(img1, img2)
     kp1, des1, kp2, des2 = SURF(img1, img2)
@@ -212,10 +213,10 @@ def detect_move(img1, img2):
 
         # store all the good matches as per Lowe's ratio test.
         for m,n in matches:
-            if m.distance < 0.6*n.distance:
+            if m.distance < 0.7*n.distance:
                 good.append(m)
 
-    if len(good) > MIN_MATCH_COUNT:
+    if len(good) >= MIN_MATCH_COUNT:
         good_sort = sorted(good, key=lambda x : x.distance)
         selected_good = len(good_sort)
         # selected_good = max(MIN_MATCH_COUNT, len(good)/2)
@@ -236,10 +237,20 @@ def detect_move(img1, img2):
 
 
 def detect_edge(img):
-    # Otsu's thresholding
+    # auto thresholding
     # blur = cv2.GaussianBlur(img,(5,5),0)
-    ret, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    edge_map = cv2.Canny(img, 200, 600)
+    # ret, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    y = cv2.calcHist([img], [0], None, [32], [0,256])
+    height, width = img.shape
+    total = 0
+    high_th = 0
+    while total < width*height*0.8:
+        total += y[high_th]
+        high_th += 1
+    high_th *= 32
+    low_th = high_th*0.5
+    # print 'th:', high_th, low_th
+    edge_map = cv2.Canny(img, low_th, high_th)
     # edge_map = cv2.Canny(img, ret*0.5, ret)
     contours, hierarchy = cv2.findContours(edge_map, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     return contours
@@ -282,9 +293,11 @@ def save2png(filename, img):
 def save2video(filename, frames, fps, frame_size):
 
     if len(frames) < fps:
+        print '%s.png' % (filename)
         save2png('%s.png' % (filename), frames[0])
     else:
-        print 'saving %s frames in %s fps:' % (len(frames), fps)
+        print '%s.mp4' % (filename)
+
         out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
         # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
         for frame in frames:
@@ -345,15 +358,16 @@ def main():
                 largest_diff = diff
             sum_diff += diff
         sum_diff -= largest_diff
-        # print 'sum_diff', sum_diff
-        # print 'p', p
 
         if move:
             if dist != -1:
-                if sum_diff < 0.001:
+                if p < 0.8 and p > 0:
                     continue
-                if p < 0.5:
-                    continue
+            if sum_diff < 0.3:
+                continue
+
+            print 'edge change', p
+            print 'sum_diff', sum_diff
             # print 'index', index
 
             shots.append(index)
