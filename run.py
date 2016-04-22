@@ -299,6 +299,8 @@ def main():
 
     cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+    cap.set(cv2.cv.CV_CAP_PROP_FPS, fps)
+    fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
     print 'fps:', fps
     print 'total_frame', total_frame
@@ -317,6 +319,7 @@ def main():
         #     continue
         if not rv1 or not rv2:
             break
+        buff.append(im1)
         buff.append(im2)
         im1 = cv2.resize(im1,(resize_width,resize_height))
         im2 = cv2.resize(im2,(resize_width,resize_height))
