@@ -13,6 +13,13 @@ sys.path.append('/usr/local/lib/python2.7/site-packages')
 #     ('Hellinger', cv2.cv.CV_COMP_BHATTACHARYYA)
 # )
 
+# DESCRIPTOR_METHODS = (
+#     ('SIFT', SIFT),
+#     ('SURF', SURF),
+#     ('FREAK', FREAK),
+#     ('BRIEF', BRIEF)
+# )
+
 
 def load_video(path):
     MAX_LONG_SIZE = 400
@@ -53,6 +60,13 @@ def histogram(frame):
     hist = (b, g, r)
 
     return hist
+
+
+def PCA(des):
+    mean, eigenvectors = cv2.PCACompute(des, maxComponents=64)
+    compressed_des = cv2.PCAProject(des, mean, eigenvectors)
+
+    return compressed_des
 
 
 def drawMatches(img1, kp1, img2, kp2, matches):
@@ -201,6 +215,8 @@ def detect_move(img1, img2):
     kp1, des1, kp2, des2 = SURF(img1, img2)
     # kp1, des1, kp2, des2 = FREAK(img1, img2)
     # kp1, des1, kp2, des2 = BRIEF(img1, img2)
+
+    PCA(des1)
 
     good = []
     if len(kp1) >= 2 and len(kp2) >= 2:
