@@ -216,7 +216,6 @@ def detect_move(img1, img2):
     # kp1, des1, kp2, des2 = FREAK(img1, img2)
     # kp1, des1, kp2, des2 = BRIEF(img1, img2)
 
-    PCA(des1)
 
     good = []
     if len(kp1) >= 2 and len(kp2) >= 2:
