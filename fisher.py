@@ -66,11 +66,11 @@ def image_descriptors(file):
     img = cv2.cvtColor(file, cv2.COLOR_BGR2GRAY)
     surf = cv2.SURF(1000)
     kp, des = surf.detectAndCompute(img, None)
-    if des == None:
+    if des is None:
         des = np.zeros((1, 128))
-        cv2.imshow('img', img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow('img', img)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
     # des = PCA(des)
     return des
 
