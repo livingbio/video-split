@@ -36,7 +36,7 @@ def load_frames(file):
     raw_frames = []
     while True:
         rv, im = cap.read()
-        if not rv or len(raw_frames)>5000:
+        if not rv:
             break
         raw_frames.append(im)
     frames = [cv2.resize(raw_frames[i], (resize_width, resize_height)) for i in range(0, len(raw_frames), SAMPLE_RATE)]
@@ -134,7 +134,6 @@ def fisher_vector(samples, means, covs, w):
     c = fisher_vector_sigma(s0, s1, s2, means, covs, w, T)
     fv = np.concatenate([np.concatenate(a), np.concatenate(b), np.concatenate(c)])
     fv = normalize(fv)
-
     return fv
 
 
@@ -149,9 +148,9 @@ def generate_gmm(frames, N):
     weights = np.float32([m for k, m in zip(range(0, len(weights)), weights) if weights[k] > th])
 
     print 'generate gmm'
-    np.save("means.gmm", means)
-    np.save("covs.gmm", covs)
-    np.save("weights.gmm", weights)
+    np.save("v11_means.gmm", means)
+    np.save("v11_covs.gmm", covs)
+    np.save("v11_weights.gmm", weights)
     print 'gmm saved'
     return means, covs, weights
 
@@ -162,7 +161,7 @@ def fisher_features(frames, gmm):
 
 
 def load_gmm(folder=""):
-    files = ["means.gmm.npy", "covs.gmm.npy", "weights.gmm.npy"]
+    files = ["v11_means.gmm.npy", "v11_covs.gmm.npy", "v11_weights.gmm.npy"]
     return map(lambda file: np.load(file), map(lambda s: folder + "/" + s, files))
 
 
@@ -180,7 +179,7 @@ def similarity_matrix(features):
     return similarity
 
 
-def merge(raw_frames, similarity, cap, k=5):
+def merge(raw_frames, similarity, cap, k=10):
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     width = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
@@ -190,26 +189,32 @@ def merge(raw_frames, similarity, cap, k=5):
         similarity[argmin] = 100
         cluster = cluster - 1
     print '# of clips:', cluster
-    num_shot = 0
+    # num_shot = 0
     i = 0
-    buff = []
+    # buff = []
     while i != similarity.shape[0] - 1:
         if similarity[i] == 100:
-            for idx in range(SAMPLE_RATE):
-                buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
+            pass
+            # for idx in range(SAMPLE_RATE):
+                # buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
         else:
-            for idx in range(SAMPLE_RATE):
-                buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
-            save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-            num_shot = num_shot + 1
-            buff = []
+            # for idx in range(SAMPLE_RATE):
+                # buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
+            save2png('frame_%s.png' % (i), raw_frames[min(i,len(raw_frames)-1)])
+            # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+            # num_shot = num_shot + 1
+            # buff = []
         i = i + 1
-    save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-    num_shot = num_shot + 1
+    save2png('frame_%s.png' % (i), raw_frames[min(i,len(raw_frames)-1)])
+    # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+    # num_shot = num_shot + 1
+
+
+def save2png(filename, img):
+    cv2.imwrite(filename, img, [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
 
 
 def save2video(filename, frames, fps, frame_size):
-
     if len(frames) < fps:
         print '%s.png' % (filename)
         save2png('%s.png' % (filename), frames[0])
@@ -232,9 +237,10 @@ def get_args():
     args = parser.parse_args()
     return args
 
+
 args = get_args()
 raw_frames, frames, cap = load_frames(args.video)
 gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
-merge(raw_frames, similarity)
+merge(raw_frames, similarity, cap)
