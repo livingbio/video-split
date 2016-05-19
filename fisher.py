@@ -198,16 +198,16 @@ def merge(raw_frames, similarity, cap, k=10):
         if similarity[i] == 100:
             pass
             # for idx in range(SAMPLE_RATE):
-                # buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
+                # buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
         else:
             # for idx in range(SAMPLE_RATE):
-                # buff.append(raw_frames[min(i+idx,len(raw_frames)-1)])
-            save2png('frame_%s.png' % (i), raw_frames[min(i,len(raw_frames)-1)])
+                # buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
+            save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
             # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
             # num_shot = num_shot + 1
             # buff = []
         i = i + 1
-    save2png('frame_%s.png' % (i), raw_frames[min(i,len(raw_frames)-1)])
+    save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
     # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
     # num_shot = num_shot + 1
 
