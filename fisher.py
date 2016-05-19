@@ -28,6 +28,8 @@ def load_video(path):
             resize = math.pow(2, long_side/MAX_LONG_SIZE)
         resize_width = int(width/resize)
         resize_height = int(height/resize)
+        total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
+        print 'total_frame', total_frame
     return cap, resize_width, resize_height
 
 
