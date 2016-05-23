@@ -1,4 +1,5 @@
 import sys
+import copy
 import cv2
 import math
 import numpy as np
@@ -130,10 +131,10 @@ def drawMatches(img1, kp1, img2, kp2, matches):
         cv2.line(out, (int(x1),int(y1)), (int(x2)+cols1,int(y2)), (255, 0, 0), 1)
 
 
-    # Show the image
-    # cv2.imshow('Matched Features', out)
-    # cv2.waitKey(0)
-    # cv2.destroyWindow('Matched Features')
+    ## Show the image
+    cv2.imshow('Matched Features', out)
+    cv2.waitKey(0)
+    cv2.destroyWindow('Matched Features')
 
     # Also return the image if you'd like a copy
     return out
@@ -209,18 +210,17 @@ def detect_move(img1, img2):
     ## img1: queryImage, img2: trainImage
     height, width = img1.shape
     MIN_MATCH_COUNT = 4
-    MAX_DIST = min(height,width)*0.2
+    MAX_DIST = min(height,width)*0.3
 
     # kp1, des1, kp2, des2 = SIFT(img1, img2)
     kp1, des1, kp2, des2 = SURF(img1, img2)
     # kp1, des1, kp2, des2 = FREAK(img1, img2)
     # kp1, des1, kp2, des2 = BRIEF(img1, img2)
 
-
     good = []
     if len(kp1) >= 2 and len(kp2) >= 2:
         FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE,trees=5)
         search_params = dict(checks=50)
 
         flann = cv2.FlannBasedMatcher(index_params, search_params)
@@ -228,14 +228,16 @@ def detect_move(img1, img2):
 
         # store all the good matches as per Lowe's ratio test.
         for m,n in matches:
-            if m.distance < 0.7*n.distance:
+            if m.distance < 0.6*n.distance:
                 good.append(m)
 
     if len(good) >= MIN_MATCH_COUNT:
-        good_sort = sorted(good, key=lambda x : x.distance)
-        selected_good = len(good_sort)
-        # selected_good = max(MIN_MATCH_COUNT, len(good)/2)
+
+        good_sort = sorted(good, key=lambda x: x.distance)
+        # selected_good = len(good_sort)
+        selected_good = max(MIN_MATCH_COUNT, len(good)/2)
         good_sort = good_sort[:selected_good]
+        # img3 = drawMatches(img1,kp1,img2,kp2,good_sort)
         dist = homography(good_sort,kp1,kp2)
 
         if dist > MAX_DIST:
@@ -245,8 +247,8 @@ def detect_move(img1, img2):
             return False, dist
 
     else:
-        img3 = drawMatches(img1,kp1,img2,kp2,good[:10])
-        print "Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT)
+        # img3 = drawMatches(img1,kp1,img2,kp2,good[:10])
+        print "Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT)
         matchesMask = None
         return True, -1
 
@@ -314,10 +316,30 @@ def save2video(filename, frames, fps, frame_size):
         print '%s.mp4' % (filename)
 
         out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
-        # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
         for frame in frames:
             out.write(frame)
         out.release()
+
+
+# def main():
+#     if len(sys.argv) < 2:
+#         print "Error - file name must be specified as first argument."
+#         return
+#     cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
+#     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
+#     print 'total_frame', total_frame
+#     index = 0
+#     sample = 5
+#     while True:
+#         (rv, im) = cap.read()   # im is a valid image if and only if rv is true
+#         index = index + 1
+#         if not rv:
+#             break
+#         ## sampling
+#         if index % sample != 0:
+#             continue
+#         save2png('frame_%s.png' % (index), im)
+#     cap.release()
 
 
 def main():
@@ -327,82 +349,102 @@ def main():
 
     cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
-    cap.set(cv2.cv.CV_CAP_PROP_FPS, fps)
-    fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
     print 'fps:', fps
     print 'total_frame', total_frame
-    # sample = int(fps/15) + 1
+    # sample = 5
+    NUM_BLOCKS = 4
 
-    shots = [0]
-    num_shot = 0
-    buff = []
+    # shots = [0]
+    # num_shot = 0
+    # buff = []
     index = 0
-    while True:
-        (rv1, im1) = cap.read()   # im is a valid image if and only if rv is true
-        (rv2, im2) = cap.read()
+    rv1, im1 = cap.read() # im is valid image if and only if rv is true
+
+    if rv1:
         index = index + 1
-        ## sampling
-        # if index % sample != 0:
-        #     continue
-        if not rv1 or not rv2:
-            break
-        buff.append(im1)
-        buff.append(im2)
         im1 = cv2.resize(im1,(resize_width,resize_height))
-        im2 = cv2.resize(im2,(resize_width,resize_height))
-
+        # buff.append(im1)
         contours1 = detect_edge(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY))
-        contours2 = detect_edge(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
-        p = edge_change_fraction(contours1, contours2)
-
         blocks1 = division(im1)
-        blocks2 = division(im2)
-        move, dist = detect_move(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY), cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
-        largest_diff = 0
-        sum_diff = 0
-        for i in range(4):
-            hist1 = histogram(blocks1[i])
-            hist2 = histogram(blocks2[i])
-            diff_r = cv2.compareHist(hist1[0], hist2[0], 1)
-            diff_g = cv2.compareHist(hist1[1], hist2[1], 1)
-            diff_b = cv2.compareHist(hist1[2], hist2[2], 1)
-            diff = diff_b + diff_g + diff_r
-            diff /= blocks1[i].shape[0]*blocks1[i].shape[1]
-            if diff > largest_diff:
-                largest_diff = diff
-            sum_diff += diff
-        sum_diff -= largest_diff
+        hist1 = []
+        for i in range(NUM_BLOCKS):
+            hist1.append(histogram(blocks1[i]))
+        while True:
+            (rv2, im2) = cap.read()
+            if not rv2:
+                break
+            index = index + 1
+            # sampling
+            # if index % sample != 0:
+                # continue
+            im2 = cv2.resize(im2,(resize_width,resize_height))
+            # buff.append(im2)
+            contours2 = detect_edge(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
+            blocks2 = division(im2)
 
-        if move:
-            if dist != -1:
-                if p < 0.8 and p > 0:
+            hist2 = []
+            for i in range(NUM_BLOCKS):
+                hist2.append(histogram(blocks2[i]))
+
+            ## Color Histogram
+            max_diff = 0
+            sum_diff = 0
+            for i in range(NUM_BLOCKS):
+                diff_r = cv2.compareHist(hist1[i][0], hist2[i][0], 1)
+                diff_g = cv2.compareHist(hist1[i][1], hist2[i][1], 1)
+                diff_b = cv2.compareHist(hist1[i][2], hist2[i][2], 1)
+                diff = diff_b + diff_g + diff_r
+                diff /= blocks1[i].shape[0]*blocks1[i].shape[1]
+                if diff > max_diff:
+                    max_diff = diff
+                sum_diff += diff
+            sum_diff -= max_diff
+
+            ## Motion Detection
+            move, dist = detect_move(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY), cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
+
+            ## Edge Detection
+            p = edge_change_fraction(contours1, contours2)
+
+            im1 = np.copy(im2)
+            contours1 = np.copy(contours2)
+            hist1 = np.copy(hist2)
+            blocks1 = copy.deepcopy(blocks2)
+
+            if move:
+                if dist != -1:
+                    if p < 0.8 and p > 0:
+                        continue
+                if sum_diff < 5:
                     continue
-            if sum_diff < 0.3:
-                continue
 
-            print 'edge change', p
-            print 'sum_diff', sum_diff
-            # print 'index', index
+                print '---------------------'
+                print 'index', index
+                print 'edge change', p
+                print 'sum_diff', sum_diff
+                print 'dist', dist
+                print '---------------------'
 
-            shots.append(index)
-            # save2png('frame_%s.png' % (index-1), im1)
-            # save2png('frame_%s.png' % (index), im2)
-            save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-            num_shot += 1
-            buff = []
+                # shots.append(index)
+                save2png('frame_%s.png' % (index), im1)
+                # save2png('frame_%s_n.png' % (index), im2)
+                # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+                # num_shot += 1
+                # buff = []
 
-            # cv2.imshow('frame %s' % (index-1), im1)
-            # cv2.imshow('frame %s' % (index), im2)
-            # cv2.waitKey(0)
-            # cv2.destroyAllWindows()
+                # cv2.imshow('frame %s' % (index-1), im1)
+                # cv2.imshow('frame %s' % (index), im2)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+
 
     cap.release()
-    shots.append(index)
+    # shots.append(index)
 
-    print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
-    for i in range(len(shots)-1):
-        print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
+    # print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
+    # for i in range(len(shots)-1):
+        # print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
 
 if __name__ == "__main__":
     main()
