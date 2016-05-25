@@ -35,11 +35,15 @@ def load_video(path):
 
 def load_frames(file):
     cap, resize_width, resize_height = load_video(file)
+    total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
+
+    index = 0
     raw_frames = []
     while True:
         rv, im = cap.read()
-        if not rv:
+        if not rv or index > total_frame:
             break
+        index = index + 1
         raw_frames.append(im)
     frames = [cv2.resize(raw_frames[i], (resize_width, resize_height)) for i in range(0, len(raw_frames), SAMPLE_RATE)]
     print 'sample', len(frames), 'from', len(raw_frames)
@@ -66,23 +70,19 @@ def image_descriptors(file):
     # img = cv2.imread(file, 0)
     # img = cv2.resize(img, (256, 256))
     img = cv2.cvtColor(file, cv2.COLOR_BGR2GRAY)
-    surf = cv2.SURF(1000)
+    surf = cv2.SURF(400)
     kp, des = surf.detectAndCompute(img, None)
     if des is None:
         des = np.zeros((1, 128))
-        # cv2.imshow('img', img)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+
+    ## Reduce dimension with PCA
     # des = PCA(des)
     return des
 
 
 def video_descriptors(frames):
     print("Calculating descriptors. # of frames: ", len(frames))
-    try:
-        return np.concatenate([image_descriptors(frame) for frame in frames])
-    except:
-        import pdb;pdb.set_trace()
+    return np.concatenate([image_descriptors(frame) for frame in frames])
 
 
 def likelihood_moment(x, ytk, moment):
@@ -143,16 +143,16 @@ def generate_gmm(frames, N):
     words = video_descriptors(frames)
     print("Training GMM of size", N)
     means, covs, weights = dictionary(words, N)
-    #Throw away gaussians with weights that are too small:
+    ## Throw away gaussians with weights that are too small:
     th = 1.0 / N
     means = np.float32([m for k, m in zip(range(0, len(weights)), means) if weights[k] > th])
     covs = np.float32([m for k, m in zip(range(0, len(weights)), covs) if weights[k] > th])
     weights = np.float32([m for k, m in zip(range(0, len(weights)), weights) if weights[k] > th])
 
     print 'generate gmm'
-    np.save("v11_means.gmm", means)
-    np.save("v11_covs.gmm", covs)
-    np.save("v11_weights.gmm", weights)
+    np.save("means.gmm", means)
+    np.save("covs.gmm", covs)
+    np.save("weights.gmm", weights)
     print 'gmm saved'
     return means, covs, weights
 
@@ -163,7 +163,7 @@ def fisher_features(frames, gmm):
 
 
 def load_gmm(folder=""):
-    files = ["v11_means.gmm.npy", "v11_covs.gmm.npy", "v11_weights.gmm.npy"]
+    files = ["means.gmm.npy", "covs.gmm.npy", "weights.gmm.npy"]
     return map(lambda file: np.load(file), map(lambda s: folder + "/" + s, files))
 
 
@@ -224,7 +224,6 @@ def save2video(filename, frames, fps, frame_size):
         print '%s.mp4' % (filename)
 
         out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
-        # out = cv2.VideoWriter('%s.mpg' % (filename), cv2.cv.CV_FOURCC('P','I','M','1'), fps, frame_size)
         for frame in frames:
             out.write(frame)
         out.release()

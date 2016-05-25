@@ -7,20 +7,6 @@ from matplotlib import pyplot as plt # for plotting
 
 sys.path.append('/usr/local/lib/python2.7/site-packages')
 
-# COMPARE_METHODS = (
-#     ('Correlation', cv2.cv.CV_COMP_CORREL),
-#     ('Chi-Square', cv2.cv.CV_COMP_CHISQR),
-#     ('Intersection', cv2.cv.CV_COMP_INTERSECT),
-#     ('Hellinger', cv2.cv.CV_COMP_BHATTACHARYYA)
-# )
-
-# DESCRIPTOR_METHODS = (
-#     ('SIFT', SIFT),
-#     ('SURF', SURF),
-#     ('FREAK', FREAK),
-#     ('BRIEF', BRIEF)
-# )
-
 
 def load_video(path):
     MAX_LONG_SIZE = 400
@@ -36,6 +22,8 @@ def load_video(path):
         width = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
         print "Video Resolution (width x height): %d x %d" % (width, height)
+
+        ## calculate resized width/height
         long_side = max(width,height)
         if long_side > MAX_LONG_SIZE:
             resize = math.pow(2,long_side/MAX_LONG_SIZE)
@@ -45,37 +33,27 @@ def load_video(path):
 
 
 def division(frame):
-    #TODO: divide each frame into 4x4 windows
+    ## This function divide each frame into 4 blocks
     length, width, ch = frame.shape
     blocks = [frame[:length/2, :width/2], frame[length/2:, :width/2], frame[:length/2, width/2:], frame[length/2:, width/2:]]
     return blocks
 
 
 def histogram(frame):
-    ## calcHist: calculate histogram for B,G,R channels in range[0,256] and 256 bins without mask
-    # hist = cv2.calcHist([frame], [0,1,2], None, [256, 256, 256], [0,256,0,256,0,256])
+    ## This function calculate histogram in B,G,R channels, set num_bin=5
     b = cv2.calcHist([frame], [0], None, [5], [0,256])
     g = cv2.calcHist([frame], [1], None, [5], [0,256])
     r = cv2.calcHist([frame], [2], None, [5], [0,256])
+
+    ## Histogram normalization
     # hist = (cv2.normalize(b),cv2.normalize(g),cv2.normalize(r))
     hist = (b, g, r)
 
     return hist
 
 
-def PCA(des):
-    mean, eigenvectors = cv2.PCACompute(des, maxComponents=64)
-    compressed_des = cv2.PCAProject(des, mean, eigenvectors)
-
-    return compressed_des
-
-
 def drawMatches(img1, kp1, img2, kp2, matches):
     """
-    My own implementation of cv2.drawMatches as OpenCV 2.4.9
-    does not have this function available but it's supported in
-    OpenCV 3.0.0
-
     This function takes in two images with their associated
     keypoints, as well as a list of DMatch data structure (matches)
     that contains which keypoints matched in which images.
@@ -153,9 +131,8 @@ def SIFT(img1, img2):
 
 def SURF(img1, img2):
     # Create SURF object
-    # Here I set Hessian Threshold to 400
-    # surf = cv2.xfeatures2d.SURF_create(1000)
-    surf = cv2.SURF(1000)
+    # Here I set Hessian Threshold to 300
+    surf = cv2.SURF(300)
 
     # Find keypoints and descriptors directly
     kp1, des1 = surf.detectAndCompute(img1,None)
@@ -213,9 +190,9 @@ def detect_move(img1, img2):
     MAX_DIST = min(height,width)*0.3
 
     # kp1, des1, kp2, des2 = SIFT(img1, img2)
-    kp1, des1, kp2, des2 = SURF(img1, img2)
     # kp1, des1, kp2, des2 = FREAK(img1, img2)
     # kp1, des1, kp2, des2 = BRIEF(img1, img2)
+    kp1, des1, kp2, des2 = SURF(img1, img2)
 
     good = []
     if len(kp1) >= 2 and len(kp2) >= 2:
@@ -226,15 +203,17 @@ def detect_move(img1, img2):
         flann = cv2.FlannBasedMatcher(index_params, search_params)
         matches = flann.knnMatch(des1,des2,k=2)
 
+        min_dist = 100
+        for match in matches:
+            if match[0].distance < min_dist:
+                min_dist = match[0].distance
         # store all the good matches as per Lowe's ratio test.
         for m,n in matches:
-            if m.distance < 0.6*n.distance:
+            if m.distance < 0.6*n.distance and m.distance < 2*min_dist:
                 good.append(m)
 
     if len(good) >= MIN_MATCH_COUNT:
-
         good_sort = sorted(good, key=lambda x: x.distance)
-        # selected_good = len(good_sort)
         selected_good = max(MIN_MATCH_COUNT, len(good)/2)
         good_sort = good_sort[:selected_good]
         # img3 = drawMatches(img1,kp1,img2,kp2,good_sort)
@@ -242,15 +221,15 @@ def detect_move(img1, img2):
 
         if dist > MAX_DIST:
             print "Distance too large - %d (pixel)" % (dist)
-            return True, dist
+            return 1, dist
         else:
-            return False, dist
+            return 0, dist
 
     else:
         # img3 = drawMatches(img1,kp1,img2,kp2,good[:10])
         print "Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT)
         matchesMask = None
-        return True, -1
+        return 2, -1
 
 
 def detect_edge(img):
@@ -317,7 +296,10 @@ def save2video(filename, frames, fps, frame_size):
 
         out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
         for frame in frames:
-            out.write(frame)
+            try:
+                out.write(frame)
+            except:
+                import pdb;pdb.set_trace()
         out.release()
 
 
@@ -329,14 +311,14 @@ def save2video(filename, frames, fps, frame_size):
 #     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
 #     print 'total_frame', total_frame
 #     index = 0
-#     sample = 5
+#     SAMPLE_RATE = 5
 #     while True:
 #         (rv, im) = cap.read()   # im is a valid image if and only if rv is true
 #         index = index + 1
-#         if not rv:
+#         if not rv or index > total_frame:
 #             break
 #         ## sampling
-#         if index % sample != 0:
+#         if index % SAMPLE_RATE != 0:
 #             continue
 #         save2png('frame_%s.png' % (index), im)
 #     cap.release()
@@ -352,19 +334,19 @@ def main():
     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
     print 'fps:', fps
     print 'total_frame', total_frame
-    # sample = 5
+    # SAMPLE_RATE = 5
     NUM_BLOCKS = 4
 
-    # shots = [0]
-    # num_shot = 0
-    # buff = []
+    shots = [0]
+    num_shot = 0
+    buff = []
     index = 0
     rv1, im1 = cap.read() # im is valid image if and only if rv is true
 
     if rv1:
         index = index + 1
+        buff.append(im1)
         im1 = cv2.resize(im1,(resize_width,resize_height))
-        # buff.append(im1)
         contours1 = detect_edge(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY))
         blocks1 = division(im1)
         hist1 = []
@@ -372,14 +354,15 @@ def main():
             hist1.append(histogram(blocks1[i]))
         while True:
             (rv2, im2) = cap.read()
-            if not rv2:
+            if not rv2 or index > total_frame: ## in case loop video
                 break
             index = index + 1
             # sampling
-            # if index % sample != 0:
+            # if index % SAMPLE_RATE != 0:
                 # continue
+            buff.append(im2)
             im2 = cv2.resize(im2,(resize_width,resize_height))
-            # buff.append(im2)
+
             contours2 = detect_edge(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
             blocks2 = division(im2)
 
@@ -412,39 +395,41 @@ def main():
             hist1 = np.copy(hist2)
             blocks1 = copy.deepcopy(blocks2)
 
+            ## Frame Description (for debug or threshold tuning)
+            # print '---------------------'
+            # print 'index           :', index
+            # print 'edge change rate:', p
+            # print 'sum of hist diff:', sum_diff
+            # print 'motion distance :', dist
+            # print '---------------------'
+
             if move:
                 if dist != -1:
-                    if p < 0.8 and p > 0:
+                    if p < 0.5 and p > 0:
                         continue
-                if sum_diff < 5:
+                if sum_diff < 1:
                     continue
 
-                print '---------------------'
-                print 'index', index
-                print 'edge change', p
-                print 'sum_diff', sum_diff
-                print 'dist', dist
-                print '---------------------'
+                shots.append(index)
+                ## Save Boundary into PNG
+                # save2png('frame_%s.png' % (index), im1)
 
-                # shots.append(index)
-                save2png('frame_%s.png' % (index), im1)
-                # save2png('frame_%s_n.png' % (index), im2)
-                # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-                # num_shot += 1
-                # buff = []
+                ## Save clips into MP4
+                save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+                num_shot += 1
+                buff = []
 
-                # cv2.imshow('frame %s' % (index-1), im1)
-                # cv2.imshow('frame %s' % (index), im2)
+                ## Show Boundary frame (for debug)
+                # cv2.imshow('frame %s' % (index), im1)
                 # cv2.waitKey(0)
                 # cv2.destroyAllWindows()
 
-
     cap.release()
-    # shots.append(index)
+    shots.append(index)
 
-    # print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
-    # for i in range(len(shots)-1):
-        # print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
+    print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
+    for i in range(len(shots)-1):
+        print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
 
 if __name__ == "__main__":
     main()
