@@ -6,7 +6,7 @@ from scipy.stats import multivariate_normal
 import time
 from sklearn import svm
 
-SAMPLE_RATE = 5
+SAMPLE_RATE = 10
 
 
 def load_video(path):
@@ -139,7 +139,7 @@ def fisher_vector(samples, means, covs, w):
     return fv
 
 
-def generate_gmm(frames, N):
+def generate_gmm(frames, N, folder=""):
     words = video_descriptors(frames)
     print("Training GMM of size", N)
     means, covs, weights = dictionary(words, N)
@@ -150,9 +150,9 @@ def generate_gmm(frames, N):
     weights = np.float32([m for k, m in zip(range(0, len(weights)), weights) if weights[k] > th])
 
     print 'generate gmm'
-    np.save("means.gmm", means)
-    np.save("covs.gmm", covs)
-    np.save("weights.gmm", weights)
+    np.save("%s/means.gmm" % folder, means)
+    np.save("%s/covs.gmm" % folder, covs)
+    np.save("%s/weights.gmm" % folder, weights)
     print 'gmm saved'
     return means, covs, weights
 
@@ -235,6 +235,7 @@ def get_args():
     parser.add_argument('-f', "--folder", help="Working folder", default='.')
     parser.add_argument('-g', "--loadgmm", help="Load Gmm dictionary", action='store_true', default=False)
     parser.add_argument('-n', "--number", help="Number of words in dictionary", default=128, type=int)
+    parser.add_argument('-k', "--k-clips", help="Number of clips wanted", default=5)
     args = parser.parse_args()
     return args
 
@@ -244,4 +245,4 @@ raw_frames, frames, cap = load_frames(args.video)
 gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
-merge(raw_frames, similarity, cap)
+merge(raw_frames, similarity, cap, args.k)
