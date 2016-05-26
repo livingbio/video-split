@@ -242,7 +242,7 @@ def get_args():
 
 args = get_args()
 raw_frames, frames, cap = load_frames(args.video)
-gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number)
+gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number, args.folder)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
 merge(raw_frames, similarity, cap, args.k)
