@@ -147,7 +147,7 @@ def FREAK(img1, img2):
 
     # Find keypoints and descriptors directly
     kp1, des1 = freak.detectAndCompute(img1,None)
-    kp2, des2 = sufreakrf.detectAndCompute(img2,None)
+    kp2, des2 = freak.detectAndCompute(img2,None)
 
     return kp1, des1, kp2, des2
 

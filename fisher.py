@@ -6,7 +6,7 @@ from scipy.stats import multivariate_normal
 import time
 from sklearn import svm
 
-SAMPLE_RATE = 10
+SAMPLE_RATE = 20
 
 
 def load_video(path):
@@ -194,6 +194,7 @@ def merge(raw_frames, similarity, cap, k=10):
     # num_shot = 0
     i = 0
     # buff = []
+    # save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
     while i != similarity.shape[0] - 1:
         if similarity[i] == 100:
             pass
@@ -202,12 +203,12 @@ def merge(raw_frames, similarity, cap, k=10):
         else:
             # for idx in range(SAMPLE_RATE):
                 # buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
-            save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+            save2png('frame_%s.png' % ((i+1)*SAMPLE_RATE), raw_frames[min((i+1)*SAMPLE_RATE,len(raw_frames)-1)])
             # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
             # num_shot = num_shot + 1
             # buff = []
         i = i + 1
-    save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+    # save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
     # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
     # num_shot = num_shot + 1
 
@@ -235,9 +236,10 @@ def get_args():
     parser.add_argument('-f', "--folder", help="Working folder", default='.')
     parser.add_argument('-g', "--loadgmm", help="Load Gmm dictionary", action='store_true', default=False)
     parser.add_argument('-n', "--number", help="Number of words in dictionary", default=128, type=int)
-    parser.add_argument('-k', "--k-clips", help="Number of clips wanted", default=5)
+    parser.add_argument('-k', "--k", help="Number of clips wanted", default=5)
     args = parser.parse_args()
     return args
+
 
 
 args = get_args()
@@ -245,4 +247,4 @@ raw_frames, frames, cap = load_frames(args.video)
 gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number, args.folder)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
-merge(raw_frames, similarity, cap, args.k)
+merge(raw_frames, similarity, cap, int(args.k))

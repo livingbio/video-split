@@ -17,12 +17,12 @@ def score(ans_list, result_list):
     miss = len(ans_list)
 
     for x in result_list:
-        inter_x = range(x-10, x+11)
+        inter_x = range(x-15, x+16)
         if any(x in ans_list for x in inter_x):
             hit = hit + 1
 
     for y in ans_list:
-        inter_y = range(y-10, y+11)
+        inter_y = range(y-15, y+16)
         if any(y in result_list for y in inter_y):
             miss = miss - 1
 
@@ -39,9 +39,14 @@ def main():
     file_id = sys.argv[1]
     files = os.listdir('ans/%s/' % (file_id))
     ans_list = extract_name(files)
+
+    print 'fisher'
+    files = os.listdir('fisher/%s/' % (file_id))
+    result_list = extract_name(files)
+    score(ans_list, result_list)
+    print 'naiive'
     files = os.listdir('naiive/%s/' % (file_id))
     result_list = extract_name(files)
-
     score(ans_list, result_list)
 
 
