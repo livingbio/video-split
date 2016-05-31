@@ -1,4 +1,4 @@
-import sys
+import sys, argparse
 import copy
 import cv2
 import math
@@ -287,49 +287,35 @@ def save2png(filename, img):
 
 
 def save2video(filename, frames, fps, frame_size):
-
     if len(frames) < fps:
-        print '%s.png' % (filename)
-        save2png('%s.png' % (filename), frames[0])
+        pass
+        # print '%s.png' % (filename)
+        # save2png('%s.png' % (filename), frames[0])
     else:
         print '%s.mp4' % (filename)
 
         out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
         for frame in frames:
-            try:
-                out.write(frame)
-            except:
-                import pdb;pdb.set_trace()
+            out.write(frame)
         out.release()
 
 
-# def main():
-#     if len(sys.argv) < 2:
-#         print "Error - file name must be specified as first argument."
-#         return
-#     cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
-#     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-#     print 'total_frame', total_frame
-#     index = 0
-#     SAMPLE_RATE = 5
-#     while True:
-#         (rv, im) = cap.read()   # im is a valid image if and only if rv is true
-#         index = index + 1
-#         if not rv or index > total_frame:
-#             break
-#         ## sampling
-#         if index % SAMPLE_RATE != 0:
-#             continue
-#         save2png('frame_%s.png' % (index), im)
-#     cap.release()
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', "--video", help="Path to the video file")
+    parser.add_argument('-f', "--folder", help="Working folder", default='.')
+    parser.add_argument('-e', "--eval", help="Eval mode, turn on to save the boundary frames only", default=False)
+    args = parser.parse_args()
+    return args
 
 
 def main():
-    if len(sys.argv) < 2:
+    args = get_args()
+    if args.video is None:
         print "Error - file name must be specified as first argument."
         return
 
-    cap, width, height, resize_width, resize_height = load_video(sys.argv[1])
+    cap, width, height, resize_width, resize_height = load_video(args.video)
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
     print 'fps:', fps
@@ -347,6 +333,8 @@ def main():
         index = index + 1
         buff.append(im1)
         im1 = cv2.resize(im1,(resize_width,resize_height))
+        if args.eval:
+            save2png('%s/frame_%s.png' % (args.folder, index), im1)
         contours1 = detect_edge(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY))
         blocks1 = division(im1)
         hist1 = []
@@ -412,12 +400,14 @@ def main():
 
                 shots.append(index)
                 ## Save Boundary into PNG
-                # save2png('frame_%s.png' % (index), im1)
+                if args.eval:
+                    save2png('%s/frame_%s.png' % (args.folder, index), im1)
 
                 ## Save clips into MP4
-                save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-                num_shot += 1
-                buff = []
+                else:
+                    save2video('%s/shot_%s' % (args.folder, num_shot), buff, fps, (width, height))
+                    num_shot += 1
+                    buff = []
 
                 ## Show Boundary frame (for debug)
                 # cv2.imshow('frame %s' % (index), im1)
@@ -430,6 +420,7 @@ def main():
     print "Video total length: %d frame unit turned into %d shots" % (index, num_shot)
     for i in range(len(shots)-1):
         print "shot %s: %d frame unit" % (i, shots[i+1]-shots[i])
+
 
 if __name__ == "__main__":
     main()

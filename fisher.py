@@ -181,7 +181,7 @@ def similarity_matrix(features):
     return similarity
 
 
-def merge(raw_frames, similarity, cap, k=10):
+def merge(raw_frames, similarity, cap, k=10, e=False):
     fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
     width = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
@@ -191,26 +191,31 @@ def merge(raw_frames, similarity, cap, k=10):
         similarity[argmin] = 100
         cluster = cluster - 1
     print '# of clips:', cluster
-    # num_shot = 0
+    num_shot = 0
     i = 0
-    # buff = []
-    # save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+    buff = []
+    if e:
+        save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
     while i != similarity.shape[0] - 1:
         if similarity[i] == 100:
-            pass
-            # for idx in range(SAMPLE_RATE):
-                # buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
+            if not e:
+                for idx in range(SAMPLE_RATE):
+                    buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
         else:
-            # for idx in range(SAMPLE_RATE):
-                # buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
-            save2png('frame_%s.png' % ((i+1)*SAMPLE_RATE), raw_frames[min((i+1)*SAMPLE_RATE,len(raw_frames)-1)])
-            # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-            # num_shot = num_shot + 1
-            # buff = []
+            if e:
+                save2png('frame_%s.png' % ((i+1)*SAMPLE_RATE), raw_frames[min((i+1)*SAMPLE_RATE,len(raw_frames)-1)])
+            else:
+                for idx in range(SAMPLE_RATE):
+                    buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
+                save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+                num_shot = num_shot + 1
+                buff = []
         i = i + 1
-    # save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
-    # save2video('shot_%s' % (num_shot), buff, fps, (width, height))
-    # num_shot = num_shot + 1
+    if e:
+        save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+    else:
+        save2video('shot_%s' % (num_shot), buff, fps, (width, height))
+        num_shot = num_shot + 1
 
 
 def save2png(filename, img):
@@ -219,8 +224,9 @@ def save2png(filename, img):
 
 def save2video(filename, frames, fps, frame_size):
     if len(frames) < fps:
-        print '%s.png' % (filename)
-        save2png('%s.png' % (filename), frames[0])
+        pass
+        # print '%s.png' % (filename)
+        # save2png('%s.png' % (filename), frames[0])
     else:
         print '%s.mp4' % (filename)
 
@@ -237,6 +243,7 @@ def get_args():
     parser.add_argument('-g', "--loadgmm", help="Load Gmm dictionary", action='store_true', default=False)
     parser.add_argument('-n', "--number", help="Number of words in dictionary", default=128, type=int)
     parser.add_argument('-k', "--k", help="Number of clips wanted", default=5)
+    parser.add_argument('-e', "--eval", help="Eval mode, turn on to save the boundary frames only", default=False)
     args = parser.parse_args()
     return args
 
@@ -247,4 +254,4 @@ raw_frames, frames, cap = load_frames(args.video)
 gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number, args.folder)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
-merge(raw_frames, similarity, cap, int(args.k))
+merge(raw_frames, similarity, cap, int(args.k), args.eval)
