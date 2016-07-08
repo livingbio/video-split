@@ -1,7 +1,10 @@
-import sys, glob, argparse
+import sys
+import glob
+import argparse
 import numpy as np
 from scipy.spatial.distance import pdist
-import math, cv2
+import math
+import cv2
 from scipy.stats import multivariate_normal
 import time
 from sklearn import svm
@@ -25,9 +28,9 @@ def load_video(path):
         print "Video Resolution (width x height): %d x %d" % (width, height)
         long_side = max(width, height)
         if long_side > MAX_LONG_SIZE:
-            resize = math.pow(2, long_side/MAX_LONG_SIZE)
-        resize_width = int(width/resize)
-        resize_height = int(height/resize)
+            resize = math.pow(2, long_side / MAX_LONG_SIZE)
+        resize_width = int(width / resize)
+        resize_height = int(height / resize)
         total_frame = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
         print 'total_frame', total_frame
     return cap, resize_width, resize_height
@@ -45,7 +48,8 @@ def load_frames(file):
             break
         index = index + 1
         raw_frames.append(im)
-    frames = [cv2.resize(raw_frames[i], (resize_width, resize_height)) for i in range(0, len(raw_frames), SAMPLE_RATE)]
+    frames = [cv2.resize(raw_frames[i], (resize_width, resize_height))
+              for i in range(0, len(raw_frames), SAMPLE_RATE)]
     print 'sample', len(frames), 'from', len(raw_frames)
     print 'raw', raw_frames[0].shape, 'resize', frames[0].shape
     return raw_frames, frames, cap
@@ -57,7 +61,8 @@ def dictionary(des, N):
     em.train(des)
 
     return np.float32(em.getMat("means")), \
-        np.float32(em.getMatVector("covs")), np.float32(em.getMat("weights"))[0]
+        np.float32(em.getMatVector("covs")), np.float32(
+            em.getMat("weights"))[0]
 
 
 def PCA(des):
@@ -75,7 +80,7 @@ def image_descriptors(file):
     if des is None:
         des = np.zeros((1, 128))
 
-    ## Reduce dimension with PCA
+    # Reduce dimension with PCA
     # des = PCA(des)
     return des
 
@@ -86,7 +91,8 @@ def video_descriptors(frames):
 
 
 def likelihood_moment(x, ytk, moment):
-    x_moment = np.power(np.float32(x), moment) if moment > 0 else np.float32([1])
+    x_moment = np.power(np.float32(
+        x), moment) if moment > 0 else np.float32([1])
     return x_moment * ytk
 
 
@@ -94,7 +100,8 @@ def likelihood_statistics(samples, means, covs, weights):
     gaussians, s0, s1, s2 = {}, {}, {}, {}
     samples = zip(range(0, len(samples)), samples)
 
-    g = [multivariate_normal(mean=means[k], cov=covs[k], allow_singular=True) for k in range(0, len(weights))]
+    g = [multivariate_normal(mean=means[k], cov=covs[
+                             k], allow_singular=True) for k in range(0, len(weights))]
     for index, x in samples:
         gaussians[index] = np.array([g_k.pdf(x) for g_k in g])
 
@@ -119,7 +126,7 @@ def fisher_vector_means(s0, s1, s2, means, sigma, w, T):
 
 
 def fisher_vector_sigma(s0, s1, s2, means, sigma, w, T):
-    return np.float32([(s2[k] - 2 * means[k]*s1[k] + (means[k]*means[k] - sigma[k]) * s0[k]) / (np.sqrt(2*w[k])*sigma[k]) for k in range(0, len(w))])
+    return np.float32([(s2[k] - 2 * means[k] * s1[k] + (means[k] * means[k] - sigma[k]) * s0[k]) / (np.sqrt(2 * w[k]) * sigma[k]) for k in range(0, len(w))])
 
 
 def normalize(fisher_vector):
@@ -134,7 +141,8 @@ def fisher_vector(samples, means, covs, w):
     a = fisher_vector_weights(s0, s1, s2, means, covs, w, T)
     b = fisher_vector_means(s0, s1, s2, means, covs, w, T)
     c = fisher_vector_sigma(s0, s1, s2, means, covs, w, T)
-    fv = np.concatenate([np.concatenate(a), np.concatenate(b), np.concatenate(c)])
+    fv = np.concatenate(
+        [np.concatenate(a), np.concatenate(b), np.concatenate(c)])
     fv = normalize(fv)
     return fv
 
@@ -143,11 +151,14 @@ def generate_gmm(frames, N, folder=""):
     words = video_descriptors(frames)
     print("Training GMM of size", N)
     means, covs, weights = dictionary(words, N)
-    ## Throw away gaussians with weights that are too small:
+    # Throw away gaussians with weights that are too small:
     th = 1.0 / N
-    means = np.float32([m for k, m in zip(range(0, len(weights)), means) if weights[k] > th])
-    covs = np.float32([m for k, m in zip(range(0, len(weights)), covs) if weights[k] > th])
-    weights = np.float32([m for k, m in zip(range(0, len(weights)), weights) if weights[k] > th])
+    means = np.float32(
+        [m for k, m in zip(range(0, len(weights)), means) if weights[k] > th])
+    covs = np.float32(
+        [m for k, m in zip(range(0, len(weights)), covs) if weights[k] > th])
+    weights = np.float32(
+        [m for k, m in zip(range(0, len(weights)), weights) if weights[k] > th])
 
     print 'generate gmm'
     np.save("%s/means.gmm" % folder, means)
@@ -158,7 +169,8 @@ def generate_gmm(frames, N, folder=""):
 
 
 def fisher_features(frames, gmm):
-    features = np.float32([fisher_vector(image_descriptors(frame), *gmm) for frame in frames])
+    features = np.float32(
+        [fisher_vector(image_descriptors(frame), *gmm) for frame in frames])
     return features
 
 
@@ -174,8 +186,8 @@ def kernel_matrix(features):
 
 def similarity_matrix(features):
     similarity = []
-    for i in range(len(features)-1):
-        similarity.append(pdist([features[i], features[i+1]]))
+    for i in range(len(features) - 1):
+        similarity.append(pdist([features[i], features[i + 1]]))
     similarity = np.matrix(similarity)
     print similarity.shape
     return similarity
@@ -195,24 +207,29 @@ def merge(raw_frames, similarity, cap, k=10, e=False):
     i = 0
     buff = []
     if e:
-        save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+        save2png('frame_%s.png' % (i * SAMPLE_RATE),
+                 raw_frames[min(i * SAMPLE_RATE, len(raw_frames) - 1)])
     while i != similarity.shape[0] - 1:
         if similarity[i] == 100:
             if not e:
                 for idx in range(SAMPLE_RATE):
-                    buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
+                    buff.append(
+                        raw_frames[min(i * SAMPLE_RATE + idx, len(raw_frames) - 1)])
         else:
             if e:
-                save2png('frame_%s.png' % ((i+1)*SAMPLE_RATE), raw_frames[min((i+1)*SAMPLE_RATE,len(raw_frames)-1)])
+                save2png('frame_%s.png' % ((i + 1) * SAMPLE_RATE),
+                         raw_frames[min((i + 1) * SAMPLE_RATE, len(raw_frames) - 1)])
             else:
                 for idx in range(SAMPLE_RATE):
-                    buff.append(raw_frames[min(i*SAMPLE_RATE+idx,len(raw_frames)-1)])
+                    buff.append(
+                        raw_frames[min(i * SAMPLE_RATE + idx, len(raw_frames) - 1)])
                 save2video('shot_%s' % (num_shot), buff, fps, (width, height))
                 num_shot = num_shot + 1
                 buff = []
         i = i + 1
     if e:
-        save2png('frame_%s.png' % (i*SAMPLE_RATE), raw_frames[min(i*SAMPLE_RATE,len(raw_frames)-1)])
+        save2png('frame_%s.png' % (i * SAMPLE_RATE),
+                 raw_frames[min(i * SAMPLE_RATE, len(raw_frames) - 1)])
     else:
         save2video('shot_%s' % (num_shot), buff, fps, (width, height))
         num_shot = num_shot + 1
@@ -230,7 +247,8 @@ def save2video(filename, frames, fps, frame_size):
     else:
         print '%s.mp4' % (filename)
 
-        out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC('m', 'p', '4', 'v'), fps, frame_size)
+        out = cv2.VideoWriter('%s.mp4' % (filename), cv2.cv.CV_FOURCC(
+            'm', 'p', '4', 'v'), fps, frame_size)
         for frame in frames:
             out.write(frame)
         out.release()
@@ -238,20 +256,24 @@ def save2video(filename, frames, fps, frame_size):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', "--video", help="Path to the video file", default='test.mp4')
+    parser.add_argument(
+        '-v', "--video", help="Path to the video file", default='test.mp4')
     parser.add_argument('-f', "--folder", help="Working folder", default='.')
-    parser.add_argument('-g', "--loadgmm", help="Load Gmm dictionary", action='store_true', default=False)
-    parser.add_argument('-n', "--number", help="Number of words in dictionary", default=128, type=int)
+    parser.add_argument('-g', "--loadgmm", help="Load Gmm dictionary",
+                        action='store_true', default=False)
+    parser.add_argument(
+        '-n', "--number", help="Number of words in dictionary", default=128, type=int)
     parser.add_argument('-k', "--k", help="Number of clips wanted", default=5)
-    parser.add_argument('-e', "--eval", help="Eval mode, turn on to save the boundary frames only", default=False)
+    parser.add_argument(
+        '-e', "--eval", help="Eval mode, turn on to save the boundary frames only", default=False)
     args = parser.parse_args()
     return args
 
 
-
 args = get_args()
 raw_frames, frames, cap = load_frames(args.video)
-gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(frames, args.number, args.folder)
+gmm = load_gmm(args.folder) if args.loadgmm else generate_gmm(
+    frames, args.number, args.folder)
 fisher_features = fisher_features(frames, gmm)
 similarity = similarity_matrix(fisher_features)
 merge(raw_frames, similarity, cap, int(args.k), args.eval)

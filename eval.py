@@ -3,7 +3,7 @@ import sys
 
 
 def extract_name(files):
-    ## extract frame number from folders
+    # extract frame number from folders
     frame_list = []
     for f in files:
         if f.endswith('png'):
@@ -12,22 +12,22 @@ def extract_name(files):
 
 
 def score(ans_list, result_list):
-    ## initiate score values
+    # initiate score values
     hit = 1
     miss = len(ans_list)
 
     for x in result_list:
-        inter_x = range(x-15, x+16)
+        inter_x = range(x - 15, x + 16)
         if any(x in ans_list for x in inter_x):
             hit = hit + 1
 
     for y in ans_list:
-        inter_y = range(y-15, y+16)
+        inter_y = range(y - 15, y + 16)
         if any(y in result_list for y in inter_y):
             miss = miss - 1
 
-    print 'hit %s out of %s' % (hit, len(result_list)+1)
-    print 'miss %s out of %s' % (miss, len(ans_list)+1)
+    print 'hit %s out of %s' % (hit, len(result_list) + 1)
+    print 'miss %s out of %s' % (miss, len(ans_list) + 1)
 
 
 def main():
